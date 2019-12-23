@@ -38,6 +38,8 @@ masterConfigFile <- 'Feeagh_master_config.yaml'
 # 1. Example - creates directories with all model setup
 export_config(config_file = masterConfigFile, model = c('FLake', 'GLM', 'GOTM', 'Simstrat'), folder = '.')
 
+# Remove sediment and outflow chunks from GLM/glm3.nml
+
 # 2. Create meteo driver files
 export_meteo(masterConfigFile, model = c('FLake', 'GLM', 'GOTM', 'Simstrat'),
              meteo_file = 'LakeEnsemblR_meteo_standard.csv')
@@ -177,3 +179,7 @@ for(i in 1:(length(wtemp_list)-1)){
   print(sum_stat(mod, obs, depth = T))
 }
 ###
+
+run_glm('GLM')
+plot_temp('GLM/output/output.nc')
+file.remove('GLM/output/output.nc')

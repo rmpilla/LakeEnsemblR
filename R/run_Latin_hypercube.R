@@ -106,11 +106,12 @@ run_Latin_hypercube <- function(parRange, num, param_file = NULL, obs_file, conf
     colnames(params) <- par_names
     params <- as.data.frame(params)
     params$par_id <- paste0('p', formatC(1:nrow(params), width = 4, format = "d", flag = "0"))
-    write.csv(params, file = file.path(folder, paste0('latin_hypercube_params_', paste0(model, collapse = '_'), '.csv')), quote = FALSE, row.names = FALSE)
+    write.csv(params, file = file.path(folder, paste0('latin_hypercube_params_', paste0(model, collapse = '_'), '_', format(Sys.time(), format = '%Y%m%d%H%M'), '.csv')), quote = FALSE, row.names = FALSE)
   }else{
     params <- read.csv(param_file, stringsAsFactors = FALSE)
   }
-
+  
+  all_pars <- NULL
   
   # FLake
   #####
@@ -146,9 +147,6 @@ run_Latin_hypercube <- function(parRange, num, param_file = NULL, obs_file, conf
     fla_met$datetime <- format(fla_met$datetime, format = '%Y-%m-%d %H:%M:%S')
     colnames(fla_met)[1] <- paste0('!', colnames(fla_met)[1])
     
-    temp_folder <- file.path(folder, 'FLake','met_temp')
-    dir.create(temp_folder, recursive = TRUE, showWarnings = FALSE)
-    
     # Select nml file for running FLake
     nml_file <- gotmtools::get_yaml_value(config_file, "config_files", "flake_config")
     nml_file <- file.path(folder, nml_file)
@@ -161,6 +159,13 @@ run_Latin_hypercube <- function(parRange, num, param_file = NULL, obs_file, conf
 
     depths <- obs_deps
     
+    # Input values to nml
+    nml_file <- list.files(file.path(folder, 'FLake'))[grep('nml', list.files(file.path(folder, 'FLake')))]
+    nml_file <- file.path(folder, 'FLake', nml_file)
+    
+    input_nml(nml_file, 'SIMULATION_PARAMS', 'time_step_number', nrow(fla_met))
+    input_nml(nml_file, 'METEO', 'meteofile', paste0("'",'temp_meteo_file.dat',"'"))
+    
     for(i in 1:nrow(params)){
       fla_met2 <- fla_met
       fla_met2$Ten_Meter_Elevation_Wind_Speed_meterPerSecond <- fla_met2$Ten_Meter_Elevation_Wind_Speed_meterPerSecond * params$wind_factor[i] 
@@ -168,13 +173,6 @@ run_Latin_hypercube <- function(parRange, num, param_file = NULL, obs_file, conf
       
       # Write to file
       write.table(fla_met2, file.path(folder, 'FLake', 'temp_meteo_file.dat'), sep = '\t', quote = FALSE, col.names = FALSE, row.names = FALSE)
-      
-      # Input values to nml
-      nml_file <- list.files(file.path(folder, 'FLake'))[grep('nml', list.files(file.path(folder, 'FLake')))]
-      nml_file <- file.path(folder, 'FLake', nml_file)
-      
-      input_nml(nml_file, 'SIMULATION_PARAMS', 'time_step_number', nrow(fla_met))
-      input_nml(nml_file, 'METEO', 'meteofile', paste0("'",'temp_meteo_file.dat',"'"))
       
       
       run_flake(sim_folder = file.path(folder, 'FLake'), nml_file = nml_file_run)
@@ -194,7 +192,15 @@ run_Latin_hypercube <- function(parRange, num, param_file = NULL, obs_file, conf
       print(paste0('[',i,'/', nrow(params),']'))
     }
     
-    write.csv(out_stats, file.path(folder, 'Flake', 'output', 'latin_hypercube_calibration_results.csv'), quote = FALSE, row.names = FALSE)
+    write.csv(out_stats, file.path(folder, 'Flake', 'output', paste0('latin_hypercube_calibration_results_','p',num, '_', format(Sys.time(), format = '%Y%m%d%H%M'), '.csv')), quote = FALSE, row.names = FALSE)
+    
+    out_stats$model <- 'FLake'
+    
+    if(is.null(all_pars)){
+      all_pars <- out_stats
+    }else{
+      all_pars <- rbind.data.frame(all_pars, out_stats)
+    }
     
     
     
@@ -234,6 +240,11 @@ run_Latin_hypercube <- function(parRange, num, param_file = NULL, obs_file, conf
     
     glmtools::write_nml(nml, nml_path)
     
+    # Input values to nml
+    nml_file <- file.path(folder, 'GLM', 'glm3.nml')
+    
+    input_nml(nml_file, 'meteorology', 'meteo_fl', paste0("'",'temp_meteo_file.csv',"'"))
+    
     # Get depths for comparison
     depths <- obs_deps
 
@@ -245,11 +256,6 @@ run_Latin_hypercube <- function(parRange, num, param_file = NULL, obs_file, conf
       
       # Write to file
       write.csv(glm_met2, file.path(folder, 'GLM', 'temp_meteo_file.csv'), quote = FALSE, row.names = FALSE)
-      
-      # Input values to nml
-      nml_file <- file.path(folder, 'GLM', 'glm3.nml')
-
-      input_nml(nml_file, 'meteorology', 'meteo_fl', paste0("'",'temp_meteo_file.csv',"'"))
       
       
       run_glm(sim_folder = file.path(folder, 'GLM'))
@@ -276,7 +282,15 @@ run_Latin_hypercube <- function(parRange, num, param_file = NULL, obs_file, conf
       print(paste0('[',i,'/', nrow(params),']'))
     }
     
-    write.csv(out_stats, file.path(folder, 'GLM', 'output', 'latin_hypercube_calibration_results.csv'), quote = FALSE, row.names = FALSE)
+    write.csv(out_stats, file.path(folder, 'GLM', 'output', paste0('latin_hypercube_calibration_results_','p',num, '_', format(Sys.time(), format = '%Y%m%d%H%M'), '.csv')), quote = FALSE, row.names = FALSE)
+    
+    out_stats$model <- 'GLM'
+    
+    if(is.null(all_pars)){
+      all_pars <- out_stats
+    }else{
+      all_pars <- rbind.data.frame(all_pars, out_stats)
+    }
     
     
     
@@ -415,18 +429,236 @@ run_Latin_hypercube <- function(parRange, num, param_file = NULL, obs_file, conf
       print(paste0('[',i,'/', nrow(params),']'))
     }
     
-    write.csv(out_stats, file.path(folder, 'GOTM', 'output', 'latin_hypercube_calibration_results.csv'), quote = FALSE, row.names = FALSE)
+    write.csv(out_stats, file.path(folder, 'GOTM', 'output', paste0('latin_hypercube_calibration_results_','p',num, '_', format(Sys.time(), format = '%Y%m%d%H%M'), '.csv')), quote = FALSE, row.names = FALSE)
     
+    out_stats$model <- 'GOTM'
     
+    if(is.null(all_pars)){
+      all_pars <- out_stats
+    }else{
+      all_pars <- rbind.data.frame(all_pars, out_stats)
+    }
     
     
     
     message('GOTM: Finished Latin Hypercube Sampling calibration')
-
-    
-
     
   }
+  
+  ## Simstrat
+  if('Simstrat' %in% model){
+    par_file <- file.path(folder,gotmtools::get_yaml_value(config_file, "config_files", "simstrat_config"))
+    met_sim <- met
+    met_outfile <- 'meteo_file_temp.dat'
+    
+    # Required input file changes depending on the forcing mode in the config file
+    forcing_mode <- get_json_value(par_file, "ModelConfig", "Forcing")
+    
+    ### Pre-processing
+    # Time
+    if(datetime){
+      # Time in simstrat is in decimal days since a defined start year
+      start_year <- get_json_value(par_file, "Simulation", "Start year")
+      
+      met_sim$datetime = as.numeric(difftime(met_sim$datetime,as.POSIXct(paste0(start_year,"-01-01")),units = "days"))
+    }else{
+      stop("Cannot find \"datetime\" column in the input file. Without this column, the model cannot run")
+    }
+    
+    # Wind
+    # If wind direction is provided, U and V wind components are calculated. If not, V wind is set to 0
+    if(wind_direction){
+      direction=270-met_sim[[colname_wind_direction]] # Converting the wind direction to the "math" direction
+      rads=direction/180*pi
+      xcomp=met_sim[[colname_wind_speed]]*cos(rads)
+      ycomp=met_sim[[colname_wind_speed]]*sin(rads)
+      met_sim$Uwind = xcomp
+      met_sim$Vwind = ycomp
+    }else{
+      met_sim$Uwind_meterPerSecond = met_sim[[colname_wind_speed]]
+      met_sim$Vwind_meterPerSecond = 0
+    }
+    
+    # Humidity
+    if(!vapour_pressure & relative_humidity){
+      # Calculate vapour pressure as: relhum * saturated vapour pressure
+      # Used formula for saturated vapour pressure from:
+      # Woolway, R. I., Jones, I. D., Hamilton, D. P., Maberly, S. C., Muraoka, K., Read, J. S., . . . Winslow, L. A. (2015).
+      # Automated calculation of surface energy fluxes with high-frequency lake buoy data.
+      # Environmental Modelling & Software, 70, 191-198.
+      
+      met_sim[[colname_vapour_pressure]]=met_sim[[colname_relative_humidity]]/100 * 6.11 * exp(17.27 * met_sim[[colname_air_temperature]] / (237.3 + met_sim[[colname_air_temperature]]))
+      
+    }
+    
+    # If snow_module is true, there needs to be a precipitation (or snowfall) columnn.
+    snow_module <- get_json_value(par_file, "ModelConfig", "SnowModel") == 1
+    # Optionally, if there is no precipitation/snowfall column, we can set the snow_module to FALSE
+    
+    if(snow_module & !(precipitation | snowfall)){
+      stop("There is no precipitation data and the Simstrat snow_module is set to TRUE.")
+    }
+    
+    
+    # Precipitation
+    # Precipitation needs to be in m h-1: 1 m s-1 = 3600 m h-1, or 1 m d-1 = 1/24 m h-1
+    if(precipitation){
+      met_sim$`Precipitation_meterPerHour`=met_sim[[colname_precipitation]]*3600
+    }else if(snowfall){
+      met_sim$`Precipitation_meterPerHour`=met_sim[[colname_snow]]/24
+    }
+    
+    
+    
+    
+    ### Build simstrat_forcing file
+    # Boolean to see if there is enough data to write the meteo file
+    enoughData=T
+    
+    
+    # Now build the simstrat forcing file, based on the forcing_mode. If data is not available, an error message is displayed
+    if(forcing_mode == "5"){
+      if(!(wind_speed & air_temperature & solar_radiation & (vapour_pressure | relative_humidity) & longwave_radiation)){
+        enoughData = F
+      }else{
+        simstrat_forcing = met_sim[, c(colname_time, "Uwind_meterPerSecond", "Vwind_meterPerSecond",
+                                       colname_air_temperature, colname_solar_radiation, colname_vapour_pressure,
+                                       colname_longwave_radiation)]
+        if(snow_module){
+          simstrat_forcing[["Precipitation_meterPerHour"]] = met_sim[["Precipitation_meterPerHour"]]
+        }
+      }
+    }else if(forcing_mode == "4"){
+      # Forcing mode 4 requires one column with "heat flux" input. LakeEnsemblR does not yet have functionality for this option
+      enoughData = F
+    }else if(forcing_mode == "3"){
+      if(!(wind_speed & air_temperature & solar_radiation & (vapour_pressure | relative_humidity) & cloud_cover)){
+        enoughData = F
+      }else{
+        simstrat_forcing = met_sim[, c(colname_time, "Uwind_meterPerSecond", "Vwind_meterPerSecond",
+                                       colname_air_temperature, colname_solar_radiation, colname_vapour_pressure,
+                                       colname_cloud_cover)]
+        if(snow_module){
+          simstrat_forcing[["Precipitation_meterPerHour"]] = met_sim[["Precipitation_meterPerHour"]]
+        }
+      }
+    }else if(forcing_mode == "2"){
+      if(!(wind_speed & air_temperature & solar_radiation & (vapour_pressure | relative_humidity))){
+        enoughData = F
+      }else{
+        simstrat_forcing = met_sim[, c(colname_time, "Uwind_meterPerSecond", "Vwind_meterPerSecond",
+                                       colname_air_temperature, colname_solar_radiation, colname_vapour_pressure)]
+        if(snow_module){
+          simstrat_forcing[["Precipitation_meterPerHour"]] = met_sim[["Precipitation_meterPerHour"]]
+        }
+      }
+    }else if(forcing_mode == "1"){
+      if(!(wind_speed & air_temperature & solar_radiation)){
+        enoughData = F
+      }else{
+        simstrat_forcing = met_sim[, c(colname_time, "Uwind_meterPerSecond", "Vwind_meterPerSecond",
+                                       colname_air_temperature, colname_solar_radiation)]
+        if(snow_module){
+          simstrat_forcing[["Precipitation_meterPerHour"]] = met_sim[["Precipitation_meterPerHour"]]
+        }
+      }
+    }
+    
+    if(!enoughData){stop(paste("There is no data to run the model in forcing mode",forcing_mode))}
+    
+    input_json(file = par_file, label = 'Input', key = 'Forcing', paste0('"', met_outfile, '"'))
+    
+    # Need to input start and stop into json par file
+    par_file <- file.path(folder, gotmtools::get_yaml_value(config_file, "config_files", "simstrat_config"))
+    timestep <- get_json_value(par_file, "Simulation", "Timestep s")
+    reference_year <- get_json_value(par_file, "Simulation", "Start year")
+    
+    # par file for running Simstrat
+    par_file <- basename(gotmtools::get_yaml_value(config_file, "config_files", "simstrat_config"))
+    
+    
+    for(i in 1:nrow(params)){
+      sim_met2 <- simstrat_forcing
+      sim_met2$Uwind_meterPerSecond <- sim_met2$Uwind_meterPerSecond * params$wind_factor[i] 
+      sim_met2$Vwind_meterPerSecond <- sim_met2$Vwind_meterPerSecond * params$wind_factor[i] 
+      sim_met2$Shortwave_Radiation_Downwelling_wattPerMeterSquared <- sim_met2$Shortwave_Radiation_Downwelling_wattPerMeterSquared * params$swr_factor[i]
+      sim_met2$Longwave_Radiation_Downwelling_wattPerMeterSquared <- sim_met2$Longwave_Radiation_Downwelling_wattPerMeterSquared * params$lw_factor[i]
+      
+      # Write to file
+      write.table(sim_met2, file = file.path(folder,"Simstrat", met_outfile),sep = "\t",quote = F,row.names = F)
+
+      run_simstrat(sim_folder = file.path(folder, 'Simstrat'), par_file = par_file, verbose = FALSE)      
+      
+      ### Extract output
+      sim_out <- read.table(file.path(folder, "Simstrat", "output", "T_out.dat"), header = T, sep=",", check.names = F)
+      
+      ### Convert decimal days to yyyy-mm-dd HH:MM:SS
+      
+      
+      sim_out[,1] <- as.POSIXct(sim_out[,1]*3600*24, origin = paste0(reference_year,"-01-01"))
+      # In case sub-hourly time steps are used, rounding might be necessary
+      sim_out[,1] <- lubridate::round_date(sim_out[,1], unit = lubridate::seconds_to_period(timestep))
+      
+      # First column datetime, then depth from shallow to deep
+      sim_out <- sim_out[,c(1,ncol(sim_out):2)]
+      
+      # Remove columns without any value
+      sim_out <- sim_out[,colSums(is.na(sim_out))<nrow(sim_out)]
+      mod_depths = as.numeric(colnames(sim_out)[-1])
+      
+      sim_depths <- -obs_deps
+      message('Interpolating Simstrat temp to include obs depths')
+      
+      # Create empty matrix and interpolate to new depths
+      wat_mat <- matrix(NA, nrow = nrow(sim_out), ncol = length(sim_depths))
+      for(j in 1:nrow(sim_out)){
+        y = as.vector(unlist(sim_out[j,-1]))
+        wat_mat[j,] <- approx(mod_depths, y, sim_depths, rule = 2)$y
+      }
+      df = data.frame(wat_mat)
+      df$datetime <- sim_out[,1]
+      df <- df[,c(ncol(df), 1:(ncol(df)-1))]
+      colnames(df) <- c("datetime", paste0('wtr_',abs(sim_depths)))
+      sim_out <- df
+      
+      
+      sim_out <- reshape2::melt(sim_out, id.vars = 1)
+      sim_out[,2] <- as.character(sim_out[,2])
+      sim_out[,2] <- as.numeric(gsub('wtr_','',sim_out[,2]))
+      colnames(sim_out) <- c('datetime','Depth_meter','Water_Temperature_celsius')
+      
+      stats <- sum_stat(sim_out, obs, depth = TRUE)
+      stats$par_id <- params$par_id[i]
+      
+      if(i == 1){
+        out_stats <- stats
+      }else{
+        out_stats <- rbind.data.frame(out_stats, stats)
+      }
+      
+      
+      print(paste0('[',i,'/', nrow(params),']'))
+    }
+    
+    
+    
+    
+    ### Write the table in the present working directory
+    write.csv(out_stats, file.path(folder, 'Simstrat', 'output', paste0('latin_hypercube_calibration_results_','p',num, '_', format(Sys.time(), format = '%Y%m%d%H%M'), '.csv')), quote = FALSE, row.names = FALSE)
+    
+    out_stats$model <- 'Simstrat'
+    
+    if(is.null(all_pars)){
+      all_pars <- out_stats
+    }else{
+      all_pars <- rbind.data.frame(all_pars, out_stats)
+    }
+    
+    message('Simstrat: Finished Latin Hypercube Sampling calibration')
+  }
+  
+  
+  write.csv(all_pars, file.path(folder,'output', paste0('LHC_calibration_results_','p',num, '_', format(Sys.time(), format = '%Y%m%d%H%M'), '.csv')), quote = FALSE, row.names = FALSE)  
   
 }
 
