@@ -93,7 +93,7 @@ for(i in 1:(length(vars)-1)){
 
 # Plot all model simulations
 # install.packages('ggpubr')
-g1 <- ggpubr::ggarrange(plotlist = plist, ncol = 1, common.legend = TRUE, legend = 'right')
+g1 <- ggpubr::ggarrange(plotlist = plist, ncol = 2, nrow = 3, common.legend = TRUE, legend = 'right')
 g1
 ggsave('output/model_ensemble_watertemp.png', g1,  dpi = 300,width = 384,height = 300, units = 'mm')
 
